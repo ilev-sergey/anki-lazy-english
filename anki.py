@@ -1,7 +1,10 @@
+import functools
+import itertools
 import json
 import logging
 import os
 import sys
+from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
 
 import psutil
@@ -118,11 +121,24 @@ def getNote(word, deckName=deckName, modelName=modelName, allowDuplicate=False):
     }
 
 
+def threading(func):
+    """Decorator for threading"""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        pool = ThreadPool()
+        results = pool.map(func, splitWords(words))
+        pool.close()
+        pool.join()
+        return list(itertools.chain.from_iterable(results))
+    return wrapper
+
+
+@threading
 def getNotes(words, **kargs):
     """Create params for addNotes function"""
     return [getNote(word, **kargs) for word in words]
 
-    
+
 def getWords(filename):
     """Get words from file"""
     Path(filename).parent.mkdir(parents=True, exist_ok=True)
@@ -133,7 +149,12 @@ def getWords(filename):
     return words
 
 
-    
+def splitWords(words, n=5): # multitasking (threads)
+    """Split list of words into lists of n"""
+    return [words[i:i+n] for i in range(0, len(words), n)]
+
+
+
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 os.chdir('.')
 
