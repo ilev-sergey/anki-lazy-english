@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sys
 
@@ -60,6 +61,7 @@ def getModel(modelName=modelName):
 
 def parseJson(word):
     """Parse Json received from Free Dictionary API"""
+    logging.info(f'parsing: {word}')
     wordJson = requests.get(f'https://api.dictionaryapi.dev/api/v2/entries/en/{word}').json()[0]
     res = ''
     for elem in wordJson['meanings']:
@@ -101,6 +103,7 @@ def parseJson(word):
 
 
     
+logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 os.chdir('.')
 
 openAnki()
