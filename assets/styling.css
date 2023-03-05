@@ -1,0 +1,14 @@
+.card {
+    font-family: arial;
+    font-size:150%;
+    text-align: center;
+    color: Black;
+    background-color:black;
+}
+
+img {
+    max-width:100%;
+    height:auto;
+    width:50px;
+    border-radius: 10px;
+}
