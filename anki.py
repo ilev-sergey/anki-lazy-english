@@ -58,6 +58,48 @@ def getModel(modelName=modelName):
     }
 
 
+def parseJson(word):
+    """Parse Json received from Free Dictionary API"""
+    wordJson = requests.get(f'https://api.dictionaryapi.dev/api/v2/entries/en/{word}').json()[0]
+    res = ''
+    for elem in wordJson['meanings']:
+        partOfSpeech = elem['partOfSpeech']
+        meanings = elem['definitions']
+        strMeaning = f'{partOfSpeech}:'
+        for i, meaning in enumerate(meanings, 1):
+            definition = meaning['definition']
+            strDefinition = f'<div>{i}) {definition}<br /> '
+            if meaning.get('example'):
+                strDefinition += '&nbsp;→ ' + meaning.get('example') + '<br />'
+            if meaning.get('synonyms'):
+                strDefinition += '&nbsp; synonyms: ' + ', '.join(meaning.get('synonyms')) + '<br />'
+            if meaning.get('antonyms'):
+                strDefinition += '&nbsp; antonyms: ' + ', '.join(meaning.get('antonyms')) + '<br />'
+            strMeaning += f'{strDefinition}</div>'
+        if elem.get('synonyms'):
+            strMeaning += 'synonyms: ' + ', '.join(elem.get('synonyms')) + '<br />'
+        res += strMeaning + '<hr /> '
+    audio = ''
+    for phonetic in wordJson['phonetics']:
+        if phonetic['audio']:
+            audio = phonetic['audio']
+            break
+    return {
+        'fields': {
+            'Word': wordJson['word'],
+            'IPA': wordJson.get('phonetic', ''),
+            'Meaning': res[:-1],
+        },
+        'audio': [{
+            'url': audio,
+            'filename': audio,
+            'fields': [
+                'Sound'
+            ]
+        }] if audio else None
+    }
+
+
     
 os.chdir('.')
 
