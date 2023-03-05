@@ -2,12 +2,14 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 
 import psutil
 import requests
 
 modelName = 'Lazy English Cards'
 deckName = 'Lazy English'
+wordList = 'words.txt'
 
 
 def request(action, **params):
@@ -100,6 +102,16 @@ def parseJson(word):
             ]
         }] if audio else None
     }
+    
+
+def getWords(filename):
+    """Get words from file"""
+    Path(filename).parent.mkdir(parents=True, exist_ok=True)
+    if not os.path.exists(filename):
+        open(filename, 'a').close()
+    with open(filename, 'r') as f:
+        words = f.read().splitlines()
+    return words
 
 
     
@@ -112,3 +124,5 @@ if modelName not in invoke('modelNames'):
     invoke('createModel', **getModel(modelName=modelName))
 if deckName not in invoke('deckNames'):
     invoke('createDeck', deck=deckName)
+
+words = getWords(wordList)
