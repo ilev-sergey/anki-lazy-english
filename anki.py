@@ -13,6 +13,7 @@ import requests
 modelName = 'Lazy English Cards'
 deckName = 'Lazy English'
 wordList = 'words.txt'
+cacheEnabled = True     # change to False to disable caching of added words
 
 
 def request(action, **params):
@@ -64,7 +65,7 @@ def getModel(modelName=modelName):
     }
 
 
-def parseJson(word):
+def parseJson(word, cache='.cache/cached_words.txt'):
     """Parse Json received from Free Dictionary API"""
     logging.info(f'parsing: {word}')
     wordJson = requests.get(f'https://api.dictionaryapi.dev/api/v2/entries/en/{word}').json()[0]
@@ -91,6 +92,9 @@ def parseJson(word):
         if phonetic['audio']:
             audio = phonetic['audio']
             break
+    if cacheEnabled:
+        with open(cache, 'a') as file:
+            file.write(word + '\n')
     return {
         'fields': {
             'Word': wordJson['word'],
@@ -107,8 +111,16 @@ def parseJson(word):
     }
 
 
+def isCached(word, cache='.cache/cached_words.txt'):
+    """Is word in cached words"""
+    return word in getWords(cache)
+
+
 def getNote(word, deckName=deckName, modelName=modelName, allowDuplicate=False): 
     """Create params for addNote function"""
+    if cacheEnabled:
+        if isCached(word):
+            return
     wordJson = parseJson(word)
     return {
         'deckName': deckName,
