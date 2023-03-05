@@ -102,8 +102,27 @@ def parseJson(word):
             ]
         }] if audio else None
     }
-    
 
+
+def getNote(word, deckName=deckName, modelName=modelName, allowDuplicate=False): 
+    """Create params for addNote function"""
+    wordJson = parseJson(word)
+    return {
+        'deckName': deckName,
+        'modelName': modelName,
+        'options': {
+            'allowDuplicate': allowDuplicate,
+        },
+        'fields': wordJson['fields'],
+        'audio': wordJson['audio'],
+    }
+
+
+def getNotes(words, **kargs):
+    """Create params for addNotes function"""
+    return [getNote(word, **kargs) for word in words]
+
+    
 def getWords(filename):
     """Get words from file"""
     Path(filename).parent.mkdir(parents=True, exist_ok=True)
@@ -126,3 +145,4 @@ if deckName not in invoke('deckNames'):
     invoke('createDeck', deck=deckName)
 
 words = getWords(wordList)
+invoke('addNotes', notes=getNotes(words))
