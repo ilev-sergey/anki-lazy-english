@@ -1,3 +1,10 @@
+"""
+This module allows you to create anki cards with
+pronunciation, explanation and examples of the use of English words
+
+The module also provides functions for easier interaction with AnkiConnect:
+ invoke, get_model, get_note, get_notes
+"""
 import functools
 import itertools
 import json
@@ -10,95 +17,101 @@ from pathlib import Path
 import psutil
 import requests
 
-modelName = 'Lazy English Cards'
-deckName = 'Lazy English'
-wordList = 'words.txt'
-cacheEnabled = True     # change to False to disable caching of added words
+MODEL_NAME = 'Lazy English Cards'
+DECK_NAME = 'Lazy English'
+WORDLIST_NAME = 'words.txt'
+CACHE_ENABLED = True     # change to False to disable caching of added words
 
 
 def request(action, **params):
+    """Form dict of given args to pass to AnkiConnect API"""
     return {"action": action, "params": params, "version": 6}
 
 
 def invoke(action, **params):
-    requestJson = json.dumps(request(action, **params))
-    response = requests.post('http://localhost:8765', requestJson).json()
+    """Invoke one of available actions with given params
+    
+    https://github.com/FooSoft/anki-connect#supported-actions
+    """
+    request_json = json.dumps(request(action, **params))
+    response = requests.post('http://localhost:8765', request_json, timeout=30).json()
     if len(response) != 2:
-        raise Exception('response has an unexpected number of fields')
+        raise requests.exceptions.RequestException('response has an unexpected number of fields')
     if 'error' not in response:
-        raise Exception('response is missing required error field')
+        raise requests.exceptions.RequestException('response is missing required error field')
     if 'result' not in response:
-        raise Exception('response is missing required result field')
+        raise requests.exceptions.RequestException('response is missing required result field')
     if response['error'] is not None:
-        raise Exception(response['error'])
+        raise requests.exceptions.RequestException(response['error'])
     return response['result']
 
 
-def openAnki():
+def open_anki():
     """Open Anki if not opened"""
     if 'anki.exe' not in (p.name() for p in psutil.process_iter()):
         if 'win' in sys.platform:
             os.startfile('C:\\Program Files\\Anki\\anki.exe')
 
 
-def getModel(modelName=modelName):
-    """Create params for createModel function"""
+def get_model(model_name=MODEL_NAME):
+    """Create params for createModel action"""
     folder = 'assets/'
     os.chdir(folder)
-    with open('styling.css', 'r') as file:
+    with open('styling.css', 'r', encoding='utf8') as file:
         css = file.read()
-    with open('back.html', 'r') as file:
-        backHtml = file.read()
-    with open('front.html', 'r') as file:
-        frontHtml = file.read()
+    with open('back.html', 'r', encoding='utf8') as file:
+        back_html = file.read()
+    with open('front.html', 'r', encoding='utf8') as file:
+        front_html = file.read()
     os.chdir('..')
     return {
-        'modelName': modelName,
+        'modelName': model_name,
         'inOrderFields': ['Word', 'Sound', 'Meaning', 'IPA'],
         'isCloze': False,
         'css': css,
         'cardTemplates': [{
-            'Name': modelName,
-            'Front': frontHtml,
-            'Back': backHtml
+            'Name': model_name,
+            'Front': front_html,
+            'Back': back_html
         }]
     }
 
 
-def parseJson(word, cache='.cache/cached_words.txt'):
+def parse_json(word, cache='.cache/cached_words.txt'):
     """Parse Json received from Free Dictionary API"""
-    logging.info(f'parsing: {word}')
-    wordJson = requests.get(f'https://api.dictionaryapi.dev/api/v2/entries/en/{word}').json()[0]
+    logging.info('parsing: %s', word)
+    word_json = requests.get(f'https://api.dictionaryapi.dev/api/v2/entries/en/{word}',
+                             timeout=10).json()[0]
     res = ''
-    for elem in wordJson['meanings']:
-        partOfSpeech = elem['partOfSpeech']
+    for elem in word_json['meanings']:
+        part_of_speech = elem['partOfSpeech']
         meanings = elem['definitions']
-        strMeaning = f'{partOfSpeech}:'
+        str_meaning = f'{part_of_speech}:'
         for i, meaning in enumerate(meanings, 1):
             definition = meaning['definition']
-            strDefinition = f'<div>{i}) {definition}<br /> '
+            str_definition = f'<div>{i}) {definition}<br /> '
             if meaning.get('example'):
-                strDefinition += '&nbsp;→ ' + meaning.get('example') + '<br />'
+                str_definition += '&nbsp;→ ' + meaning.get('example') + '<br />'
             if meaning.get('synonyms'):
-                strDefinition += '&nbsp; synonyms: ' + ', '.join(meaning.get('synonyms')) + '<br />'
+                str_definition += '&nbsp; synonyms: ' + ', '.join(meaning.get('synonyms')) + '<br/>'
             if meaning.get('antonyms'):
-                strDefinition += '&nbsp; antonyms: ' + ', '.join(meaning.get('antonyms')) + '<br />'
-            strMeaning += f'{strDefinition}</div>'
+                str_definition += '&nbsp; antonyms: ' + ', '.join(meaning.get('antonyms')) + '<br/>'
+            str_meaning += f'{str_definition}</div>'
         if elem.get('synonyms'):
-            strMeaning += 'synonyms: ' + ', '.join(elem.get('synonyms')) + '<br />'
-        res += strMeaning + '<hr /> '
+            str_meaning += 'synonyms: ' + ', '.join(elem.get('synonyms')) + '<br />'
+        res += str_meaning + '<hr /> '
     audio = ''
-    for phonetic in wordJson['phonetics']:
+    for phonetic in word_json['phonetics']:
         if phonetic['audio']:
             audio = phonetic['audio']
             break
-    if cacheEnabled:
-        with open(cache, 'a') as file:
+    if CACHE_ENABLED:
+        with open(cache, 'a', encoding='utf8') as file:
             file.write(word + '\n')
     return {
         'fields': {
-            'Word': wordJson['word'],
-            'IPA': wordJson.get('phonetic', ''),
+            'Word': word_json['word'],
+            'IPA': word_json.get('phonetic', ''),
             'Meaning': res[:-1],
         },
         'audio': [{
@@ -111,71 +124,85 @@ def parseJson(word, cache='.cache/cached_words.txt'):
     }
 
 
-def isCached(word, cache='.cache/cached_words.txt'):
+def is_cached(word, cache='.cache/cached_words.txt'):
     """Is word in cached words"""
-    return word in getWords(cache)
+    return word in get_words(cache)
 
 
-def getNote(word, deckName=deckName, modelName=modelName, allowDuplicate=False): 
-    """Create params for addNote function"""
-    if cacheEnabled:
-        if isCached(word):
+def get_note(word, deck_name=DECK_NAME, model_name=MODEL_NAME, allow_duplicate=False):
+    """Create params for addNote action"""
+    if CACHE_ENABLED:
+        if is_cached(word):
             return
-    wordJson = parseJson(word)
+    word_json = parse_json(word)
     return {
-        'deckName': deckName,
-        'modelName': modelName,
+        'deckName': deck_name,
+        'modelName': model_name,
         'options': {
-            'allowDuplicate': allowDuplicate,
+            'allowDuplicate': allow_duplicate,
         },
-        'fields': wordJson['fields'],
-        'audio': wordJson['audio'],
+        'fields': word_json['fields'],
+        'audio': word_json['audio'],
     }
 
 
 def threading(func):
     """Decorator for threading"""
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        pool = ThreadPool()
-        results = pool.map(func, splitWords(words))
-        pool.close()
-        pool.join()
+    def wrapper(iterable, **kwargs):
+        map_func = functools.partial(func, **kwargs)
+        with ThreadPool() as pool:
+            results = pool.map(map_func, split_iterable(iterable))
         return list(itertools.chain.from_iterable(results))
     return wrapper
 
 
 @threading
-def getNotes(words, **kargs):
-    """Create params for addNotes function"""
-    return [getNote(word, **kargs) for word in words]
+def get_notes(words, **kargs):
+    """Create params for addNotes action"""
+    return [get_note(word, **kargs) for word in words]
 
 
-def getWords(filename):
+def get_words(filename):
     """Get words from file"""
     Path(filename).parent.mkdir(parents=True, exist_ok=True)
     if not os.path.exists(filename):
-        open(filename, 'a').close()
-    with open(filename, 'r') as f:
-        words = f.read().splitlines()
+        open(filename, 'a', encoding='utf8').close()
+    with open(filename, 'r', encoding='utf8') as file:
+        words = file.read().splitlines()
     return words
 
 
-def splitWords(words, n=5): # multitasking (threads)
-    """Split list of words into lists of n"""
-    return [words[i:i+n] for i in range(0, len(words), n)]
+def split_iterable(iterable, size=5):
+    """Split iterable into iterables"""
+    if sys.version_info >= (3, 12):
+        for batch in itertools.batched(iterable, size):
+            yield batch
+    else:
+        for i in range(0, len(iterable), size):
+            yield iterable[i:i+size]
 
 
+def main():
+    """Create model and deck, add cards to deck
+    
+    Create model with name MODEL_NAME if not exists
+    Create deck with name DECK_NAME if not exists
+    Add card to deck for each uncached word from WORDLIST_NAME
+    """
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+    os.chdir('.')
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
-os.chdir('.')
+    open_anki()
 
-openAnki()
+    if MODEL_NAME not in invoke('modelNames'):
+        invoke('createModel', **get_model(model_name=MODEL_NAME))
+    if DECK_NAME not in invoke('deckNames'):
+        invoke('createDeck', deck=DECK_NAME)
 
-if modelName not in invoke('modelNames'):
-    invoke('createModel', **getModel(modelName=modelName))
-if deckName not in invoke('deckNames'):
-    invoke('createDeck', deck=deckName)
+    words = get_words(WORDLIST_NAME)
+    invoke('addNotes', notes=get_notes(words))
 
-words = getWords(wordList)
-invoke('addNotes', notes=getNotes(words))
+
+if __name__ == '__main__':
+    main()
