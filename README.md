@@ -25,7 +25,7 @@ For next uses, you can overwrite existing words with new ones, or add new words 
 ## Features
 - plugin supports multutreading to add notes faster 
     - [AnkiConnect doesn't support multithreading], so interaction with its API probably can't be much faster (that's why I decided to use cache instead of checking if note exists using AnkiConnect API)
-- caching (cache fill up while adding new words (not using existed cards), so if the cards are not added, try to delete cache manually)
+- caching (cache fill up while adding new words (not using existed cards))
 
 [AnkiConnect]: https://ankiweb.net/shared/info/2055492159
 [Free Dictionary API]: https://dictionaryapi.dev

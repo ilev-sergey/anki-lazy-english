@@ -20,6 +20,7 @@ import requests
 MODEL_NAME = 'Lazy English Cards'
 DECK_NAME = 'Lazy English'
 WORDLIST_NAME = 'words.txt'
+CACHE_PATH = '.cache/cached_words.json'
 CACHE_ENABLED = True     # change to False to disable caching of added words
 
 
@@ -53,15 +54,15 @@ def open_anki():
             os.startfile('C:\\Program Files\\Anki\\anki.exe')
 
 
-def get_model(model_name=MODEL_NAME):
+def get_model(model_name):
     """Create params for createModel action"""
     folder = 'assets/'
     os.chdir(folder)
-    with open('styling.css', 'r', encoding='utf8') as file:
+    with open('styling.css', 'r', encoding='utf-8') as file:
         css = file.read()
-    with open('back.html', 'r', encoding='utf8') as file:
+    with open('back.html', 'r', encoding='utf-8') as file:
         back_html = file.read()
-    with open('front.html', 'r', encoding='utf8') as file:
+    with open('front.html', 'r', encoding='utf-8') as file:
         front_html = file.read()
     os.chdir('..')
     return {
@@ -77,7 +78,7 @@ def get_model(model_name=MODEL_NAME):
     }
 
 
-def parse_json(word, cache='.cache/cached_words.txt'):
+def parse_json(word):
     """Parse Json received from Free Dictionary API"""
     logging.info('parsing: %s', word)
     word_json = requests.get(f'https://api.dictionaryapi.dev/api/v2/entries/en/{word}',
@@ -105,9 +106,6 @@ def parse_json(word, cache='.cache/cached_words.txt'):
         if phonetic['audio']:
             audio = phonetic['audio']
             break
-    if CACHE_ENABLED:
-        with open(cache, 'a', encoding='utf8') as file:
-            file.write(word + '\n')
     return {
         'fields': {
             'Word': word_json['word'],
@@ -124,18 +122,13 @@ def parse_json(word, cache='.cache/cached_words.txt'):
     }
 
 
-def is_cached(word, cache='.cache/cached_words.txt'):
-    """Is word in cached words"""
-    return word in get_words(cache)
-
-
-def get_note(word, deck_name=DECK_NAME, model_name=MODEL_NAME, allow_duplicate=False):
+def get_note(word, cache, deck_name=DECK_NAME, model_name=MODEL_NAME, allow_duplicate=False):
     """Create params for addNote action"""
     if CACHE_ENABLED:
-        if is_cached(word):
-            return
+        if word in cache:
+            return cache[word]
     word_json = parse_json(word)
-    return {
+    note = {
         'deckName': deck_name,
         'modelName': model_name,
         'options': {
@@ -144,6 +137,9 @@ def get_note(word, deck_name=DECK_NAME, model_name=MODEL_NAME, allow_duplicate=F
         'fields': word_json['fields'],
         'audio': word_json['audio'],
     }
+    if CACHE_ENABLED:
+        cache[word] = note
+    return note
 
 
 def threading(func):
@@ -167,10 +163,22 @@ def get_words(filename):
     """Get words from file"""
     Path(filename).parent.mkdir(parents=True, exist_ok=True)
     if not os.path.exists(filename):
-        open(filename, 'a', encoding='utf8').close()
-    with open(filename, 'r', encoding='utf8') as file:
+        open(filename, 'a', encoding='utf-8').close()
+    with open(filename, 'r', encoding='utf-8') as file:
         words = file.read().splitlines()
     return words
+
+
+def load_cache():
+    """Get cache from json file"""
+    Path(CACHE_PATH).parent.mkdir(parents=True, exist_ok=True)
+    if os.path.exists(CACHE_PATH):
+        if os.path.getsize(CACHE_PATH) > 0:
+            with open(CACHE_PATH, 'r', encoding='utf-8') as file:
+                return json.load(file)
+        return {}
+    open(CACHE_PATH, 'a', encoding='utf-8').close()
+    return {}
 
 
 def split_iterable(iterable, size=5):
@@ -199,10 +207,14 @@ def main():
         invoke('createModel', **get_model(model_name=MODEL_NAME))
     if DECK_NAME not in invoke('deckNames'):
         invoke('createDeck', deck=DECK_NAME)
+    cache = load_cache() if CACHE_ENABLED else {}
 
     words = get_words(WORDLIST_NAME)
-    invoke('addNotes', notes=get_notes(words))
+    invoke('addNotes', notes=get_notes(words, cache=cache))
 
+    if CACHE_ENABLED:
+        with open(CACHE_PATH, 'w', encoding='utf-8') as file:
+            json.dump(cache, file, indent=2)
 
 if __name__ == '__main__':
     main()
