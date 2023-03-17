@@ -1,1 +1,11 @@
+# Python
+__pycache__/
+.venv/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Local
 .cache/
+words.txt
