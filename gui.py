@@ -18,7 +18,7 @@ from constants import *
 
 
 class LazyDialog(QDialog):
-    """Main window"""
+    """Main window (view)"""
 
     def __init__(self):
         super().__init__()
@@ -38,6 +38,14 @@ class LazyDialog(QDialog):
         self.inputField = QTextEdit()
         self.generalLayout.addWidget(self.inputField)
 
+    def _addLogging(self):
+        self.logWidget = self.QTextEditLogger()
+        self.logWidget.setFormatter(logging.Formatter("%(message)s"))
+        logging.getLogger().addHandler(self.logWidget)
+        logging.getLogger().setLevel(logging.INFO)
+
+        self.subLayout.addWidget(self.logWidget.widget)
+
     def _createButtons(self):
         self.buttons = {
             "Submit": QPushButton("Submit"),
@@ -47,21 +55,15 @@ class LazyDialog(QDialog):
         buttonLayout = QHBoxLayout()
         buttonLayout.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-        buttonLayout.addWidget(self.buttons["Submit"])
-        buttonLayout.addWidget(self.buttons["Clear"])
+        for button in self.buttons.values():
+            buttonLayout.addWidget(button)
 
         self.subLayout.addLayout(buttonLayout)
 
-    def _addLogging(self):
-        self.logWidget = self.QTextEditLogger()
-        self.logWidget.setFormatter(logging.Formatter("%(message)s"))
-        logging.getLogger().addHandler(self.logWidget)
-        logging.getLogger().setLevel(logging.INFO)
-
-        self.subLayout.addWidget(self.logWidget.widget)
-
     def _createShortcuts(self):
-        self.ctrlReturn = QShortcut(QKeySequence("Ctrl+Return"), self)
+        self.shortcuts = {
+            "Ctrl+Return": QShortcut(QKeySequence("Ctrl+Return"), self),
+        }
 
     def clearInput(self):
         """Clear the display."""
@@ -85,25 +87,27 @@ class LazyDialog(QDialog):
 
 
 class LazyController:
-    """AnkiLazyEnglish's controller class."""
+    """Controller class"""
 
     def __init__(self, view, model):
         self._view = view
         self._model = model
         self._connectSignalsAndSlots()
 
-    def _createNotes(self):
-        words = self._view.inputField.toPlainText().split()
-        self._model._createNotes(words)
-        logging.info("cards created")
-
     def _connectSignalsAndSlots(self):
         self._view.buttons["Submit"].clicked.connect(self._createNotes)
         self._view.buttons["Clear"].clicked.connect(self._view.clearInput)
-        self._view.ctrlReturn.activated.connect(self._createNotes)
+		self._view.shortcuts["Ctrl+Return"].activated.connect(self._createNotes)
+
+    def _createNotes(self):
+        words = self._view.inputField.toPlainText().split()
+        self._model.createNotes(words)
+        logging.info("cards created")
 
 
 class LazyModel:
+    """Model class"""
+
     def __init__(self):
         app.open_anki()
         self._initialize()
@@ -114,7 +118,7 @@ class LazyModel:
         if DECK_NAME not in app.invoke("deckNames"):
             app.invoke("createDeck", deck=DECK_NAME)
 
-    def _createNotes(self, words):
+    def createNotes(self, words):
         cache = app.load_cache() if CACHE_ENABLED else {}
         app.invoke("addNotes", notes=app.get_notes(words, cache=cache))
         if CACHE_ENABLED:
