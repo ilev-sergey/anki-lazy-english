@@ -20,10 +20,21 @@ pip install -r requirements.txt
 
 For further use, you can overwrite existing words with new ones, or add new words anywhere in the file. The script doesn't modify this file in any way, so you can keep your wordlist this way if you want.
 
-### Upload the wordlist interactively
+### Upload the wordlist with GUI
+
+#### Upload words interactively
 
 - Run `gui.py`
 - Paste your wordlist into the input field (write one word per line)
+- Press the `Submit` button
+- Wait until `cards created` message is displayed
+- Close the application
+
+#### Upload via text file
+
+- Run `gui.py`
+- Press the `Upload` button
+- Select text file
 - Press the `Submit` button
 - Wait until `cards created` message is displayed
 - Close the application

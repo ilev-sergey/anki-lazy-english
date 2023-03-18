@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTextEdit,
     QVBoxLayout,
+    QFileDialog,
 )
 
 import app
@@ -36,6 +37,7 @@ class LazyDialog(QDialog):
 
     def _createInputField(self):
         self.inputField = QTextEdit()
+        self.inputField.setPlaceholderText("Write your words (one per line)")
         self.generalLayout.addWidget(self.inputField)
 
     def _addLogging(self):
@@ -49,6 +51,7 @@ class LazyDialog(QDialog):
     def _createButtons(self):
         self.buttons = {
             "Submit": QPushButton("Submit"),
+            "Upload": QPushButton("Upload"),
             "Clear": QPushButton("Clear"),
         }
 
@@ -63,16 +66,27 @@ class LazyDialog(QDialog):
     def _createShortcuts(self):
         self.shortcuts = {
             "Ctrl+Return": QShortcut(QKeySequence("Ctrl+Return"), self),
+            "Ctrl+O": QShortcut(QKeySequence("Ctrl+O"), self),
         }
 
     def clearInput(self):
-        """Clear the display."""
         self.inputField.clear()
-        self.inputField.setFocus()
+        self.setFocusOnInput()
         logging.info("cleared")
 
     def getInput(self):
         return self.inputField.toPlainText()
+
+    def setInput(self, text):
+        self.inputField.setText(text)
+        self.setFocusOnInput()
+
+    def setFocusOnInput(self):
+        self.inputField.setFocus()
+
+        cursor = self.inputField.textCursor()
+        cursor.setPosition(len(self.inputField.toPlainText()))
+        self.inputField.setTextCursor(cursor)
 
     class QTextEditLogger(logging.Handler):
         """Logging widget"""
@@ -96,13 +110,22 @@ class LazyController:
 
     def _connectSignalsAndSlots(self):
         self._view.buttons["Submit"].clicked.connect(self._createNotes)
+        self._view.buttons["Upload"].clicked.connect(self._uploadFile)
         self._view.buttons["Clear"].clicked.connect(self._view.clearInput)
-		self._view.shortcuts["Ctrl+Return"].activated.connect(self._createNotes)
+
+        self._view.shortcuts["Ctrl+Return"].activated.connect(self._createNotes)
+        self._view.shortcuts["Ctrl+O"].activated.connect(self._uploadFile)
 
     def _createNotes(self):
         words = self._view.inputField.toPlainText().split()
         self._model.createNotes(words)
         logging.info("cards created")
+
+    def _uploadFile(self):
+        filename = QFileDialog.getOpenFileName()[0]
+        with open(filename) as file:
+            words = file.read()
+        self._view.setInput(words)
 
 
 class LazyModel:
