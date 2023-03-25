@@ -45,63 +45,65 @@ class LazyDialog(QDialog):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(APP_NAME)
-        self.generalLayout = QVBoxLayout()
-        self.subLayout = QHBoxLayout()
 
+        generalLayout = QVBoxLayout()
         tabs = QTabWidget()
-        self.generalLayout.addWidget(tabs)
+        self.setLayout(generalLayout)
+
+        generalLayout.addWidget(tabs)
         tabs.addTab(self._createWordsTab(), "General")
 
         self._createShortcuts()
 
-        self.setLayout(self.generalLayout)
-
     def _createWordsTab(self):
-        self.wordsLayout = QVBoxLayout()
+        wordsLayout = QVBoxLayout()
+        subLayout = QHBoxLayout()
 
-        self._createInputField()
-        self._addLogging()
-        self._createButtons()
+        wordsLayout.addWidget(self._createInputField())
+        wordsLayout.addLayout(subLayout)
 
-        self.wordsLayout.addLayout(self.subLayout)
+        subLayout.addWidget(self._createLogWidget())
+        subLayout.addLayout(self._createButtonsLayout())
 
         widget = QWidget()
-        widget.setLayout(self.wordsLayout)
+        widget.setLayout(wordsLayout)
         return widget
-
-    def _createInputField(self):
-        self.inputField = QTextEdit()
-        self.inputField.setPlaceholderText("Write your words (one per line)")
-        self.wordsLayout.addWidget(self.inputField)
-
-    def _addLogging(self):
-        self.logWidget = self.QTextEditLogger()
-        self.logWidget.setFormatter(logging.Formatter("%(message)s"))
-        logging.getLogger().addHandler(self.logWidget)
-        logging.getLogger().setLevel(logging.INFO)
-
-        self.subLayout.addWidget(self.logWidget.widget)
-
-    def _createButtons(self):
-        self.buttons = {
-            "Submit": QPushButton("Submit"),
-            "Upload": QPushButton("Upload"),
-            "Clear": QPushButton("Clear"),
-        }
-
-        buttonLayout = QHBoxLayout()
-        buttonLayout.setAlignment(Qt.AlignmentFlag.AlignRight)
-
-        for button in self.buttons.values():
-            buttonLayout.addWidget(button)
-
-        self.subLayout.addLayout(buttonLayout)
 
     def _createShortcuts(self):
         self.shortcuts = {
             "Ctrl+Return": QShortcut(QKeySequence("Ctrl+Return"), self),
             "Ctrl+O": QShortcut(QKeySequence("Ctrl+O"), self),
         }
+
+    ## words tab
+
+    def _createInputField(self):
+        self.inputField = QTextEdit()
+        self.inputField.setPlaceholderText("Write your words (one per line)")
+        return self.inputField
+
+    def _createLogWidget(self):
+        logWidget = self.QTextEditLogger()
+        logWidget.setFormatter(logging.Formatter("%(message)s"))
+        logging.getLogger().addHandler(logWidget)
+        logging.getLogger().setLevel(logging.INFO)
+        return logWidget.widget
+
+    def _createButtonsLayout(self):
+        buttonsLayout = QHBoxLayout()
+        buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self.buttons = {
+            "Submit": QPushButton("Submit"),
+            "Upload": QPushButton("Upload"),
+            "Clear": QPushButton("Clear"),
+        }
+        for button in self.buttons.values():
+            buttonsLayout.addWidget(button)
+
+        return buttonsLayout
+
+    ## methods
 
     def clearInput(self):
         self.inputField.clear()
@@ -120,13 +122,7 @@ class LazyDialog(QDialog):
 
         cursor = self.inputField.textCursor()
         cursor.setPosition(len(self.inputField.toPlainText()))
-        self.inputField.setTextCursor(cursor)
-
-    def disableSubmit(self):
-        self.buttons["Submit"].setDisabled(True)
-
-    def enableSubmit(self):
-        self.buttons["Submit"].setDisabled(False)
+        self.inputField.setTextCursor(cursor)  # set cursor at the end
 
     class QTextEditLogger(logging.Handler):
         """Logging widget"""
@@ -176,8 +172,12 @@ class LazyController:
         self._view.shortcuts["Ctrl+Return"].activated.connect(self.createNotes)
         self._view.shortcuts["Ctrl+O"].activated.connect(self.uploadFile)
 
-        self.worker.started.connect(self._view.disableSubmit)
-        self.worker.finished.connect(self._view.enableSubmit)
+        self.worker.started.connect(
+            lambda: self._view.buttons["Submit"].setDisabled(True)
+        )
+        self.worker.finished.connect(
+            lambda: self._view.buttons["Submit"].setDisabled(False)
+        )
 
     @threading
     def _initializeModel(self):
