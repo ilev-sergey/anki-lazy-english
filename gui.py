@@ -1,15 +1,20 @@
 import functools
 import json
 import logging
+from pathlib import Path
 
+import yaml
 from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QDialog,
     QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QTabWidget,
     QTextEdit,
@@ -19,6 +24,11 @@ from PyQt6.QtWidgets import (
 
 import app
 from constants import *
+
+modelName = MODEL_NAME
+deckName = DECK_NAME
+cacheEnabled = CACHE_ENABLED
+cachePath = CACHE_PATH
 
 
 class Worker(QObject):
@@ -51,7 +61,9 @@ class LazyDialog(QDialog):
         self.setLayout(generalLayout)
 
         generalLayout.addWidget(tabs)
+
         tabs.addTab(self._createWordsTab(), "General")
+        tabs.addTab(self._createSettingsTab(), "Settings")
 
         self._createShortcuts()
 
@@ -67,6 +79,21 @@ class LazyDialog(QDialog):
 
         widget = QWidget()
         widget.setLayout(wordsLayout)
+        return widget
+
+    def _createSettingsTab(self):
+        settingsLayout = QVBoxLayout()
+        settingsSubLayout = QHBoxLayout()
+        self.settingsLabel = QLabel()
+
+        settingsLayout.addLayout(self._createSettingsFormLayout())
+        settingsLayout.addLayout(settingsSubLayout)
+
+        settingsSubLayout.addWidget(self.settingsLabel)
+        settingsSubLayout.addLayout(self._createSettingsButtonsLayout())
+
+        widget = QWidget()
+        widget.setLayout(settingsLayout)
         return widget
 
     def _createShortcuts(self):
@@ -102,6 +129,38 @@ class LazyDialog(QDialog):
             buttonsLayout.addWidget(button)
 
         return buttonsLayout
+
+    ## settings tab
+
+    def _createSettingsFormLayout(self):
+        formLayout = QFormLayout()
+
+        self.config = {
+            "modelName": QLineEdit(modelName),
+            "deckName": QLineEdit(deckName),
+            "cacheEnabled": QCheckBox(),
+            "cachePath": QLineEdit(cachePath),
+        }
+        formLayout.addRow("Name of anki model:", self.config["modelName"])
+        formLayout.addRow("Name of anki deck:", self.config["deckName"])
+        formLayout.addRow("Cache enabled:", self.config["cacheEnabled"])
+        formLayout.addRow("Cache path:", self.config["cachePath"])
+        self.config["cacheEnabled"].setChecked(cacheEnabled)
+
+        return formLayout
+
+    def _createSettingsButtonsLayout(self):
+        settingsButtonsLayout = QHBoxLayout()
+        settingsButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self.settingsButtons = {
+            "Save": QPushButton("Save"),
+            "Set defaults": QPushButton("Set defaults"),
+        }
+        for button in self.settingsButtons.values():
+            settingsButtonsLayout.addWidget(button)
+
+        return settingsButtonsLayout
 
     ## methods
 
@@ -159,6 +218,7 @@ class LazyController:
         self.thread = QThread()
         self.worker = Worker()
         self.worker.moveToThread(self.thread)
+
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(self.thread.quit)
 
@@ -168,6 +228,15 @@ class LazyController:
         )
         self._view.buttons["Upload"].clicked.connect(self.uploadFile)
         self._view.buttons["Clear"].clicked.connect(self._view.clearInput)
+
+        self._view.settingsButtons["Save"].clicked.connect(self.saveConfig)
+        self._view.settingsButtons["Save"].clicked.connect(
+            lambda checked: self._view.settingsLabel.setText("Please restart the app")
+        )
+        self._view.settingsButtons["Set defaults"].clicked.connect(self.setDefaults)
+        self._view.settingsButtons["Set defaults"].clicked.connect(
+            lambda checked: self._view.settingsLabel.setText("Please restart the app")
+        )
 
         self._view.shortcuts["Ctrl+Return"].activated.connect(self.createNotes)
         self._view.shortcuts["Ctrl+O"].activated.connect(self.uploadFile)
@@ -195,6 +264,21 @@ class LazyController:
                 words = file.read()
                 self._view.setInput(words)
 
+    def saveConfig(self):
+        with open(CONFIG_PATH, "w") as file:
+            constants = [MODEL_NAME, DECK_NAME, CACHE_ENABLED, CACHE_PATH]
+            for const, (key, field) in zip(constants, self._view.config.items()):
+                value = field.text() if key != "cacheEnabled" else field.isChecked()
+                if const != value:
+                    yaml.safe_dump({key: value}, file)
+
+    def setDefaults(self):
+        Path(CONFIG_PATH).unlink(missing_ok=True)  # delete config
+        self._view.config["modelName"].setText(MODEL_NAME)
+        self._view.config["deckName"].setText(DECK_NAME)
+        self._view.config["cacheEnabled"].setChecked(CACHE_ENABLED)
+        self._view.config["cachePath"].setText(CACHE_PATH)
+
 
 class LazyModel:
     """Model class"""
@@ -203,24 +287,38 @@ class LazyModel:
     def _initialize():
         logging.info("Initialization...")
         app.open_anki()
-        if MODEL_NAME not in app.invoke("modelNames"):
-            app.invoke("createModel", **app.get_model(model_name=MODEL_NAME))
-        if DECK_NAME not in app.invoke("deckNames"):
-            app.invoke("createDeck", deck=DECK_NAME)
+        if modelName not in app.invoke("modelNames"):
+            app.invoke("createModel", **app.get_model(model_name=modelName))
+        if deckName not in app.invoke("deckNames"):
+            app.invoke("createDeck", deck=deckName)
         logging.info("Ready to use")
 
     @staticmethod
     def _createNotes(words):
         logging.info("Creating cards...")
-        cache = app.load_cache() if CACHE_ENABLED else {}
-        app.invoke("addNotes", notes=app.get_notes(words, cache=cache))
-        if CACHE_ENABLED:
-            with open(CACHE_PATH, "w", encoding="utf-8") as file:
+        cache = app.load_cache() if cacheEnabled else {}
+        app.invoke(
+            "addNotes",
+            notes=app.get_notes(
+                words, cache=cache, model_name=modelName, deck_name=deckName
+            ),
+        )
+        if cacheEnabled:
+            with open(cachePath, "w", encoding="utf-8") as file:
                 json.dump(cache, file, indent=2)
         logging.info("Сards created")
 
 
+def loadConfig():
+    if Path(CONFIG_PATH).is_file():
+        with open(CONFIG_PATH, "r") as file:
+            config = yaml.safe_load(file)
+            if config:
+                globals().update(config)
+
+
 def main():
+    loadConfig()
     app = QApplication([])
     dialog = LazyDialog()
     controller = LazyController(view=dialog, model=LazyModel)
