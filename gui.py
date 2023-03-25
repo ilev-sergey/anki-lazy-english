@@ -11,8 +11,10 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QTabWidget,
     QTextEdit,
     QVBoxLayout,
+    QWidget,
 )
 
 import app
@@ -46,18 +48,31 @@ class LazyDialog(QDialog):
         self.generalLayout = QVBoxLayout()
         self.subLayout = QHBoxLayout()
 
+        tabs = QTabWidget()
+        self.generalLayout.addWidget(tabs)
+        tabs.addTab(self._createWordsTab(), "General")
+
+        self._createShortcuts()
+
+        self.setLayout(self.generalLayout)
+
+    def _createWordsTab(self):
+        self.wordsLayout = QVBoxLayout()
+
         self._createInputField()
         self._addLogging()
         self._createButtons()
-        self._createShortcuts()
 
-        self.generalLayout.addLayout(self.subLayout)
-        self.setLayout(self.generalLayout)
+        self.wordsLayout.addLayout(self.subLayout)
+
+        widget = QWidget()
+        widget.setLayout(self.wordsLayout)
+        return widget
 
     def _createInputField(self):
         self.inputField = QTextEdit()
         self.inputField.setPlaceholderText("Write your words (one per line)")
-        self.generalLayout.addWidget(self.inputField)
+        self.wordsLayout.addWidget(self.inputField)
 
     def _addLogging(self):
         self.logWidget = self.QTextEditLogger()
