@@ -6,3 +6,10 @@ WORDLIST_NAME = "words.txt"
 CACHE_PATH = ".cache/cached_words.json"
 CACHE_ENABLED = True  # change to False to disable caching of added words
 CONFIG_PATH = "config.yaml"
+DICTIONARIES = {
+    "Oxford": False,
+    "Cambridge": True,
+    "Macmillan": True,
+    "Urban Dictionary": True,
+    "Cambridge (ru)": False,
+}

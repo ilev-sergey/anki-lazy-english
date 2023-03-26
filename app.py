@@ -56,7 +56,7 @@ def open_anki():
             os.startfile("C:\\Program Files\\Anki\\anki.exe")
 
 
-def get_model(model_name):
+def get_model(model_name, links={}):
     """Create params for createModel action"""
     folder = "assets/"
     os.chdir(folder)
@@ -67,6 +67,25 @@ def get_model(model_name):
     with open("front.html", "r", encoding="utf-8") as file:
         front_html = file.read()
     os.chdir("..")
+    back_html += "<p>"
+    dicts = DICTIONARIES
+    dicts |= links
+    for key, value in dicts.items():
+        if value:
+            match key:
+                case "Oxford":
+                    back_html += "https://www.oxfordlearnersdictionaries.com/definition/english/{{Word}}\n"
+                case "Cambridge":
+                    back_html += '<p> en:<a href="https://dictionary.cambridge.org/dictionary/english/{{Word}}/"><img src="https://w7.pngwing.com/pngs/647/218/png-transparent-coat-of-arms-of-the-university-of-cambridge-university-of-oxford-ulverston-victoria-high-school-others-text-logo-symmetry.png"></a>\n'
+                case "Macmillan":
+                    back_html += "https://www.macmillandictionary.com/dictionary/british/{{Word}}\n"
+                case "Urban Dictionary":
+                    back_html += (
+                        "https://www.urbandictionary.com/define.php?term={{Word}}\n"
+                    )
+                case "Cambridge (ru)":
+                    back_html += '<a href="https://dictionary.cambridge.org/dictionary/english-russian/{{Word}}/"><img src="https://w7.pngwing.com/pngs/647/218/png-transparent-coat-of-arms-of-the-university-of-cambridge-university-of-oxford-ulverston-victoria-high-school-others-text-logo-symmetry.png"></a></p>\n'
+    back_html += "</p>"
     return {
         "modelName": model_name,
         "inOrderFields": ["Word", "Sound", "Meaning", "IPA"],

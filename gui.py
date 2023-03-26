@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFormLayout,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -87,6 +88,7 @@ class LazyDialog(QDialog):
         self.settingsLabel = QLabel()
 
         settingsLayout.addLayout(self._createSettingsFormLayout())
+        settingsLayout.addLayout(self._createSettingsDictionariesLayout())
         settingsLayout.addLayout(settingsSubLayout)
 
         settingsSubLayout.addWidget(self.settingsLabel)
@@ -148,6 +150,43 @@ class LazyDialog(QDialog):
         self.config["cacheEnabled"].setChecked(cacheEnabled)
 
         return formLayout
+
+    def _createSettingsDictionariesLayout(self):
+        dictionariesLayout = QVBoxLayout()
+        gridLayout = QGridLayout()
+        label = QLabel("Dictionaries:")
+
+        dictionariesLayout.addWidget(label)
+        dictionariesLayout.addLayout(gridLayout)
+
+        self.dictionaries = {
+            "Oxford": QCheckBox("Oxford"),
+            "Cambridge": QCheckBox("Cambridge"),
+            "Macmillan": QCheckBox("Macmillan"),
+            "Urban Dictionary": QCheckBox("Urban Dictionary"),
+            "Cambridge (ru)": QCheckBox("Cambridge (ru)"),
+        }
+        row, column = 0, 0
+        for widget in self.dictionaries.values():  # add 2 widgets per line
+            if column >= 2:
+                column = 0
+                row += 1
+            gridLayout.addWidget(widget, row, column)
+            column += 1
+
+        # set defaults
+        for dic, value in DICTIONARIES.items():
+            self.dictionaries[dic].setChecked(value)
+
+        # set from config
+        if configExists():
+            with open(CONFIG_PATH, "r") as file:
+                config = yaml.safe_load(file)
+                if "dictionaries" in config:
+                    for dic, value in config["dictionaries"].items():
+                        self.dictionaries[dic].setChecked(value)
+
+        return dictionariesLayout
 
     def _createSettingsButtonsLayout(self):
         settingsButtonsLayout = QHBoxLayout()
@@ -272,12 +311,24 @@ class LazyController:
                 if const != value:
                     yaml.safe_dump({key: value}, file)
 
+            dictionaries = {}
+            for const, (key, checkbox) in zip(
+                DICTIONARIES.values(), self._view.dictionaries.items()
+            ):
+                value = checkbox.isChecked()
+                if const != value:
+                    dictionaries[key] = value
+            if dictionaries:
+                yaml.safe_dump({"dictionaries": dictionaries}, file)
+
     def setDefaults(self):
         Path(CONFIG_PATH).unlink(missing_ok=True)  # delete config
         self._view.config["modelName"].setText(MODEL_NAME)
         self._view.config["deckName"].setText(DECK_NAME)
         self._view.config["cacheEnabled"].setChecked(CACHE_ENABLED)
         self._view.config["cachePath"].setText(CACHE_PATH)
+        for key, value in DICTIONARIES.items():
+            self._view.dictionaries[key].setChecked(value)
 
 
 class LazyModel:
@@ -287,8 +338,15 @@ class LazyModel:
     def _initialize():
         logging.info("Initialization...")
         app.open_anki()
+        dicts = ""
+        if configExists():
+            with open(CONFIG_PATH, "r") as file:
+                config = yaml.safe_load(file)
+                dicts = config.get("dictionaries")
         if modelName not in app.invoke("modelNames"):
-            app.invoke("createModel", **app.get_model(model_name=modelName))
+            app.invoke(
+                "createModel", **app.get_model(model_name=modelName, links=dicts)
+            )
         if deckName not in app.invoke("deckNames"):
             app.invoke("createDeck", deck=deckName)
         logging.info("Ready to use")
@@ -315,6 +373,11 @@ def loadConfig():
             config = yaml.safe_load(file)
             if config:
                 globals().update(config)
+
+
+def configExists():
+    config = Path(CONFIG_PATH)
+    return config.is_file() and config.stat().st_size != 0
 
 
 def main():
