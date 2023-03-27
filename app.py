@@ -74,17 +74,15 @@ def get_model(model_name, links={}):
         if value:
             match key:
                 case "Oxford":
-                    back_html += "https://www.oxfordlearnersdictionaries.com/definition/english/{{Word}}\n"
+                    back_html += '<a href="https://www.oxfordlearnersdictionaries.com/definition/english/{{Word}}"><img src="https://fontslogo.com/wp-content/uploads/2017/10/Oxford-Dictionaries-Logo-Font.jpg"></a>\n'
                 case "Cambridge":
-                    back_html += '<p> en:<a href="https://dictionary.cambridge.org/dictionary/english/{{Word}}/"><img src="https://w7.pngwing.com/pngs/647/218/png-transparent-coat-of-arms-of-the-university-of-cambridge-university-of-oxford-ulverston-victoria-high-school-others-text-logo-symmetry.png"></a>\n'
+                    back_html += '<a href="https://dictionary.cambridge.org/dictionary/english/{{Word}}/"><img src="https://w7.pngwing.com/pngs/647/218/png-transparent-coat-of-arms-of-the-university-of-cambridge-university-of-oxford-ulverston-victoria-high-school-others-text-logo-symmetry.png"></a>\n'
                 case "Macmillan":
-                    back_html += "https://www.macmillandictionary.com/dictionary/british/{{Word}}\n"
+                    back_html += '<a href="https://www.macmillandictionary.com/dictionary/british/{{Word}}"><img src="https://pbs.twimg.com/profile_images/1225002102608494592/GRFg82nJ_400x400.jpg"></a>\n'
                 case "Urban Dictionary":
-                    back_html += (
-                        "https://www.urbandictionary.com/define.php?term={{Word}}\n"
-                    )
+                    back_html += '<a href="https://www.urbandictionary.com/define.php?term={{Word}}"><img src="https://play-lh.googleusercontent.com/unQjigibyJQvru9rcCOX7UCqyByuf5-h_tLpA-9fYH93uqrRAnZ0J2IummiejMMhi5Ch"></a>\n'
                 case "Cambridge (ru)":
-                    back_html += '<a href="https://dictionary.cambridge.org/dictionary/english-russian/{{Word}}/"><img src="https://w7.pngwing.com/pngs/647/218/png-transparent-coat-of-arms-of-the-university-of-cambridge-university-of-oxford-ulverston-victoria-high-school-others-text-logo-symmetry.png"></a></p>\n'
+                    back_html += 'ru:<a href="https://dictionary.cambridge.org/dictionary/english-russian/{{Word}}/"><img src="https://w7.pngwing.com/pngs/647/218/png-transparent-coat-of-arms-of-the-university-of-cambridge-university-of-oxford-ulverston-victoria-high-school-others-text-logo-symmetry.png"></a></p>\n'
     back_html += "</p>"
     return {
         "modelName": model_name,
