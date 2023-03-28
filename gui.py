@@ -1,6 +1,7 @@
 import functools
 import json
 import logging
+import shutil
 from pathlib import Path
 
 import yaml
@@ -10,12 +11,14 @@ from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QTabWidget,
     QTextEdit,
@@ -65,6 +68,7 @@ class LazyDialog(QDialog):
 
         tabs.addTab(self._createWordsTab(), "General")
         tabs.addTab(self._createSettingsTab(), "Settings")
+        tabs.addTab(self._createAdvancedTab(), "Advanced")
 
         self._createShortcuts()
 
@@ -96,6 +100,15 @@ class LazyDialog(QDialog):
 
         widget = QWidget()
         widget.setLayout(settingsLayout)
+        return widget
+
+    def _createAdvancedTab(self):
+        advancedLayout = QVBoxLayout()
+
+        advancedLayout.addLayout(self._createAdvancedButtonsLayout())
+
+        widget = QWidget()
+        widget.setLayout(advancedLayout)
         return widget
 
     def _createShortcuts(self):
@@ -201,6 +214,28 @@ class LazyDialog(QDialog):
 
         return settingsButtonsLayout
 
+    ## advanced tab
+
+    def _createAdvancedButtonsLayout(self):
+        advancedButtonsLayout = QHBoxLayout()
+        advancedButtonsLayout.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+
+        self.advancedButtons = {
+            "Clear data": QPushButton("Clear data"),
+        }
+        for button in self.advancedButtons.values():
+            advancedButtonsLayout.addWidget(button)
+
+        return advancedButtonsLayout
+
+    def _runWarningDialog(self):
+        warning = LazyDialog.WarningDialog()
+        confirmation = warning.exec()
+
+        return confirmation == QMessageBox.StandardButton.Ok
+
     ## methods
 
     def clearInput(self):
@@ -232,6 +267,19 @@ class LazyDialog(QDialog):
         def emit(self, record):
             msg = self.format(record)
             self.widget.setText(msg)
+
+    class WarningDialog(QMessageBox):
+        def __init__(self):
+            super().__init__()
+            self.setIcon(QMessageBox.Icon.Warning)
+            self.setText("Are you sure you want to clear all data?")
+            self.setInformativeText(
+                "This will delete all decks and models created by this application, as well as the settings you have set."
+            )
+            self.setWindowTitle("Warning")
+            self.setStandardButtons(
+                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+            )
 
 
 def threading(func):
@@ -276,6 +324,8 @@ class LazyController:
         self._view.settingsButtons["Set defaults"].clicked.connect(
             lambda checked: self._view.settingsLabel.setText("Please restart the app")
         )
+
+        self._view.advancedButtons["Clear data"].clicked.connect(self.clearData)
 
         self._view.shortcuts["Ctrl+Return"].activated.connect(self.createNotes)
         self._view.shortcuts["Ctrl+O"].activated.connect(self.uploadFile)
@@ -330,6 +380,15 @@ class LazyController:
         for key, value in DICTIONARIES.items():
             self._view.dictionaries[key].setChecked(value)
 
+    def clearData(self):
+        confirmed = self._view._runWarningDialog()
+        if confirmed:
+            with open(CREATED_PATH, "r") as file:
+                data = json.load(file)
+                app.invoke("deleteDecks", decks=data["decks"], cardsToo=True)
+            Path(CONFIG_PATH).unlink(missing_ok=True)
+            shutil.rmtree(".cache")
+
 
 class LazyModel:
     """Model class"""
@@ -338,17 +397,16 @@ class LazyModel:
     def _initialize():
         logging.info("Initialization...")
         app.open_anki()
-        dicts = ""
+        dic = {}
         if configExists():
             with open(CONFIG_PATH, "r") as file:
                 config = yaml.safe_load(file)
-                dicts = config.get("dictionaries")
+                dic = config.get("dictionaries", {})
         if modelName not in app.invoke("modelNames"):
-            app.invoke(
-                "createModel", **app.get_model(model_name=modelName, links=dicts)
-            )
+            app.invoke("createModel", **app.get_model(model_name=modelName, links=dic))
         if deckName not in app.invoke("deckNames"):
             app.invoke("createDeck", deck=deckName)
+        LazyModel.logCreatedJson(modelName, deckName)
         logging.info("Ready to use")
 
     @staticmethod
@@ -365,6 +423,24 @@ class LazyModel:
             with open(cachePath, "w", encoding="utf-8") as file:
                 json.dump(cache, file, indent=2)
         logging.info("Сards created")
+
+    @staticmethod
+    def logCreatedJson(modelName, deckName):
+        Path(CREATED_PATH).parent.mkdir(parents=True, exist_ok=True)
+        Path(CREATED_PATH).touch(exist_ok=True)
+        if Path(CREATED_PATH).stat().st_size == 0:
+            with open(CREATED_PATH, "w") as file:
+                currentData = {"models": [modelName], "decks": [deckName]}
+                json.dump(currentData, file, indent=2)
+        else:
+            with open(CREATED_PATH, "r+") as file:
+                data = json.load(file)
+                file.seek(0)
+                if modelName not in data["models"]:
+                    data["models"].append(modelName)
+                if deckName not in data["decks"]:
+                    data["decks"].append(deckName)
+                json.dump(data, file, indent=2)
 
 
 def loadConfig():
