@@ -6,12 +6,11 @@ from pathlib import Path
 
 import yaml
 from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QKeySequence, QShortcut
+from PyQt6.QtGui import QKeySequence, QShortcut, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
     QDialog,
-    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QGridLayout,
@@ -59,6 +58,7 @@ class LazyDialog(QDialog):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(APP_NAME)
+        self.setWindowIcon(QIcon("assets/logo.jpg"))
 
         generalLayout = QVBoxLayout()
         tabs = QTabWidget()
