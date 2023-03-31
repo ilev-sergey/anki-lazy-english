@@ -296,6 +296,7 @@ class LazyController:
 
     def __init__(self, view, model):
         self._view = view
+        self._model = LazyModel()
 
         self._initializeThread()
         self._connectSignalsAndSlots()
@@ -325,7 +326,9 @@ class LazyController:
             lambda checked: self._view.settingsLabel.setText("Please restart the app")
         )
 
-        self._view.advancedButtons["Clear data"].clicked.connect(self.clearData)
+        self._view.advancedButtons["Clear data"].clicked.connect(
+            lambda checked: self.clearData()
+        )
 
         self._view.shortcuts["Ctrl+Return"].activated.connect(self.createNotes)
         self._view.shortcuts["Ctrl+O"].activated.connect(self.uploadFile)
@@ -354,6 +357,8 @@ class LazyController:
                 self._view.setInput(words)
 
     def saveConfig(self):
+        prevData = self._model.config
+
         with open(CONFIG_PATH, "w") as file:
             constants = [MODEL_NAME, DECK_NAME, CACHE_ENABLED, CACHE_PATH]
             for const, (key, field) in zip(constants, self._view.config.items()):
@@ -371,6 +376,17 @@ class LazyController:
             if dictionaries:
                 yaml.safe_dump({"dictionaries": dictionaries}, file)
 
+        with open(CONFIG_PATH, "r") as file:
+            currData = yaml.safe_load(file)
+        with open(CREATED_PATH, "r+") as file:
+            data = json.load(file)
+        with open(CREATED_PATH, "w") as file:
+            if prevData != currData:
+                data["Config changed"] = True
+            else:
+                data["Config changed"] = False
+            json.dump(data, file, indent=2)
+
     def setDefaults(self):
         Path(CONFIG_PATH).unlink(missing_ok=True)  # delete config
         self._view.config["modelName"].setText(MODEL_NAME)
@@ -385,13 +401,17 @@ class LazyController:
         if confirmed:
             with open(CREATED_PATH, "r") as file:
                 data = json.load(file)
-                app.invoke("deleteDecks", decks=data["decks"], cardsToo=True)
+                app.invoke("deleteDecks", decks=data["Created decks"], cardsToo=True)
             Path(CONFIG_PATH).unlink(missing_ok=True)
             shutil.rmtree(".cache")
 
 
 class LazyModel:
     """Model class"""
+
+    def __init__(self):
+        with open(CONFIG_PATH, "r") as file:
+            self.config = yaml.safe_load(file)
 
     @staticmethod
     def _initialize():
@@ -402,11 +422,16 @@ class LazyModel:
             with open(CONFIG_PATH, "r") as file:
                 config = yaml.safe_load(file)
                 dic = config.get("dictionaries", {})
-        if modelName not in app.invoke("modelNames"):
-            app.invoke("createModel", **app.get_model(model_name=modelName, links=dic))
-        if deckName not in app.invoke("deckNames"):
-            app.invoke("createDeck", deck=deckName)
-        LazyModel.logCreatedJson(modelName, deckName)
+        with open(CREATED_PATH, "r+") as file:
+            configChanged = json.load(file)["Config changed"]
+        if configChanged:
+            if modelName not in app.invoke("modelNames"):
+                app.invoke(
+                    "createModel", **app.get_model(model_name=modelName, links=dic)
+                )
+            if deckName not in app.invoke("deckNames"):
+                app.invoke("createDeck", deck=deckName)
+            LazyModel.logCreatedJson(modelName, deckName)
         logging.info("Ready to use")
 
     @staticmethod
@@ -430,16 +455,19 @@ class LazyModel:
         Path(CREATED_PATH).touch(exist_ok=True)
         if Path(CREATED_PATH).stat().st_size == 0:
             with open(CREATED_PATH, "w") as file:
-                currentData = {"models": [modelName], "decks": [deckName]}
+                currentData = {
+                    "Created models": [modelName],
+                    "Created decks": [deckName],
+                }
                 json.dump(currentData, file, indent=2)
         else:
             with open(CREATED_PATH, "r+") as file:
                 data = json.load(file)
                 file.seek(0)
-                if modelName not in data["models"]:
-                    data["models"].append(modelName)
-                if deckName not in data["decks"]:
-                    data["decks"].append(deckName)
+                if modelName not in data["Created models"]:
+                    data["Created models"].append(modelName)
+                if deckName not in data["Created decks"]:
+                    data["Created decks"].append(deckName)
                 json.dump(data, file, indent=2)
 
 
