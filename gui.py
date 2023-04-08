@@ -391,30 +391,19 @@ class LazyController:
                 words = file.read()
                 self._view.setInput(words)
 
-    def updateConfigFile(self, config):
-        if config:  # config is not default
-            with open(CONFIG_PATH, "w") as configFile:
-                yaml.safe_dump(config, configFile)
-        else:
-            deleteFile(CONFIG_PATH)
-
     def saveConfig(self):
-        initialConfig = self._model.initialConfig
         currentConfig = self._view.getConfig()
+        self._model.configHandler.updateConfigFile(currentConfig)
 
-        self.updateConfigFile(currentConfig)
+        initialConfig = self._model.configHandler.initialConfig
+        cache = self._model.cacheHandler.getCache()
 
-        cache = self.getCache()
-        with open(CACHE_PATH, "w") as cacheFile:
-            if initialConfig != currentConfig:
-                cache["Config changed"] = True
-            else:
-                cache["Config changed"] = False
-            json.dump(cache, cacheFile, indent=2)
+        if initialConfig != currentConfig:
+            cache["Config changed"] = True
+        else:
+            cache["Config changed"] = False
 
-    def getCache(self):
-        with open(CACHE_PATH, "r") as cacheFile:
-            return json.load(cacheFile)
+        self._model.cacheHandler.updateCacheFile(cache)
 
     def clearData(self):
         confirmed = self._view._runWarningDialog()
@@ -430,19 +419,16 @@ class LazyModel:
     """Model class"""
 
     def __init__(self):
-        self.initialConfig = {}
         self.cacheHandler = CacheHandler(CACHE_PATH)
-        if fileExists(CONFIG_PATH):
-            with open(CONFIG_PATH, "r") as file:
-                self.initialConfig = yaml.safe_load(file)
+        self.configHandler = ConfigHandler(CONFIG_PATH)
 
     def _initialize(self):
         logging.info("Initialization...")
         app.open_anki()
 
-        dicts = self.initialConfig.get("dictionaries", {})
-
         if self.cacheHandler.configChanged():
+            dicts = self.configHandler.initialConfig.get("dictionaries", {})
+
             if modelName not in app.invoke("modelNames"):
                 app.invoke(
                     "createModel", **app.get_model(model_name=modelName, links=dicts)
@@ -469,6 +455,26 @@ class LazyModel:
             with open(cachePath, "w", encoding="utf-8") as file:
                 json.dump(cache, file, indent=2)
         logging.info("Сards created")
+
+
+class ConfigHandler:
+    def __init__(self, configPath):
+        self.configPath = configPath
+
+        self.initialConfig = {}
+        if fileExists(self.configPath):
+            with open(self.configPath, "r") as file:
+                self.initialConfig = yaml.safe_load(file)
+
+    def updateConfigFile(self, config):
+        if config:  # config is not default
+            with open(CONFIG_PATH, "w") as configFile:
+                yaml.safe_dump(config, configFile)
+        else:
+            self.deleteConfigFile()
+
+    def deleteConfigFile(self):
+        deleteFile(self.configPath)
 
 
 class CacheHandler:
