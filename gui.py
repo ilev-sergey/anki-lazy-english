@@ -31,7 +31,7 @@ from constants import *
 modelName = MODEL_NAME
 deckName = DECK_NAME
 cacheEnabled = CACHE_ENABLED
-cachePath = CACHE_PATH
+cachePath = CACHED_WORDS_PATH
 
 
 class Worker(QObject):
@@ -247,7 +247,7 @@ class LazyDialog(QDialog):
         self.config["modelName"].setText(MODEL_NAME)
         self.config["deckName"].setText(DECK_NAME)
         self.config["cacheEnabled"].setChecked(CACHE_ENABLED)
-        self.config["cachePath"].setText(CACHE_PATH)
+        self.config["cachePath"].setText(CACHED_WORDS_PATH)
         for key, value in DICTIONARIES.items():
             self.dictionaries[key].setChecked(value)
 
@@ -282,7 +282,8 @@ class LazyDialog(QDialog):
             self.setIcon(QMessageBox.Icon.Warning)
             self.setText("Are you sure you want to clear all data?")
             self.setInformativeText(
-                "This will delete all decks and models created by this application, as well as the settings you have set."
+                "This will delete all decks and models created by this application, "
+                "as well as the settings you have set."
             )
             self.setWindowTitle("Warning")
             self.setStandardButtons(
@@ -367,14 +368,14 @@ class LazyController:
                 self._view.setInput(words)
 
     def saveConfig(self):
-        prevData = self._model.config
+        initialConfig = self._model.config
 
-        with open(CONFIG_PATH, "w") as file:
-            constants = [MODEL_NAME, DECK_NAME, CACHE_ENABLED, CACHE_PATH]
+        with open(CONFIG_PATH, "w") as configFile:
+            constants = [MODEL_NAME, DECK_NAME, CACHE_ENABLED, CACHED_WORDS_PATH]
             for const, (key, field) in zip(constants, self._view.config.items()):
                 value = field.text() if key != "cacheEnabled" else field.isChecked()
                 if const != value:
-                    yaml.safe_dump({key: value}, file)
+                    yaml.safe_dump({key: value}, configFile)
 
             dictionaries = {}
             for const, (key, checkbox) in zip(
@@ -384,23 +385,23 @@ class LazyController:
                 if const != value:
                     dictionaries[key] = value
             if dictionaries:
-                yaml.safe_dump({"dictionaries": dictionaries}, file)
+                yaml.safe_dump({"dictionaries": dictionaries}, configFile)
 
-        with open(CONFIG_PATH, "r") as file:
-            currData = yaml.safe_load(file)
-        with open(CREATED_PATH, "r+") as file:
-            data = json.load(file)
-        with open(CREATED_PATH, "w") as file:
-            if prevData != currData:
-                data["Config changed"] = True
+        with open(CONFIG_PATH, "r") as configFile:
+            currentConfig = yaml.safe_load(configFile)
+        with open(CACHE_PATH, "r+") as cacheFile:
+            cache = json.load(cacheFile)
+        with open(CACHE_PATH, "w") as cacheFile:
+            if initialConfig != currentConfig:
+                cache["Config changed"] = True
             else:
-                data["Config changed"] = False
-            json.dump(data, file, indent=2)
+                cache["Config changed"] = False
+            json.dump(cache, cacheFile, indent=2)
 
     def clearData(self):
         confirmed = self._view._runWarningDialog()
         if confirmed:
-            with open(CREATED_PATH, "r") as file:
+            with open(CACHE_PATH, "r") as file:
                 data = json.load(file)
                 app.invoke("deleteDecks", decks=data["Created decks"], cardsToo=True)
             deleteFile(CONFIG_PATH)
@@ -423,7 +424,7 @@ class LazyModel:
             with open(CONFIG_PATH, "r") as file:
                 config = yaml.safe_load(file)
                 dic = config.get("dictionaries", {})
-        with open(CREATED_PATH, "r+") as file:
+        with open(CACHE_PATH, "r+") as file:
             configChanged = json.load(file)["Config changed"]
         if configChanged:
             if modelName not in app.invoke("modelNames"):
@@ -452,16 +453,16 @@ class LazyModel:
 
     @staticmethod
     def logCreatedJson(modelName, deckName):
-        createFile(CREATED_PATH, exist_ok=True)
-        if fileNotEmpty(CREATED_PATH):
-            with open(CREATED_PATH, "w") as file:
+        createFile(CACHE_PATH, exist_ok=True)
+        if fileNotEmpty(CACHE_PATH):
+            with open(CACHE_PATH, "w") as file:
                 currentData = {
                     "Created models": [modelName],
                     "Created decks": [deckName],
                 }
                 json.dump(currentData, file, indent=2)
         else:
-            with open(CREATED_PATH, "r+") as file:
+            with open(CACHE_PATH, "r+") as file:
                 data = json.load(file)
                 file.seek(0)
                 if modelName not in data["Created models"]:

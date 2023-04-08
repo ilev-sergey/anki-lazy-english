@@ -191,13 +191,13 @@ def get_words(filename):
 
 def load_cache():
     """Get cache from json file"""
-    Path(CACHE_PATH).parent.mkdir(parents=True, exist_ok=True)
-    if os.path.exists(CACHE_PATH):
-        if os.path.getsize(CACHE_PATH) > 0:
-            with open(CACHE_PATH, "r", encoding="utf-8") as file:
+    Path(CACHED_WORDS_PATH).parent.mkdir(parents=True, exist_ok=True)
+    if os.path.exists(CACHED_WORDS_PATH):
+        if os.path.getsize(CACHED_WORDS_PATH) > 0:
+            with open(CACHED_WORDS_PATH, "r", encoding="utf-8") as file:
                 return json.load(file)
         return {}
-    open(CACHE_PATH, "a", encoding="utf-8").close()
+    open(CACHED_WORDS_PATH, "a", encoding="utf-8").close()
     return {}
 
 
@@ -233,7 +233,7 @@ def main():
     invoke("addNotes", notes=get_notes(words, cache=cache))
 
     if CACHE_ENABLED:
-        with open(CACHE_PATH, "w", encoding="utf-8") as file:
+        with open(CACHED_WORDS_PATH, "w", encoding="utf-8") as file:
             json.dump(cache, file, indent=2)
 
 
