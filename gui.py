@@ -192,7 +192,7 @@ class LazyDialog(QDialog):
             self.dictionaries[dic].setChecked(value)
 
         # set from config
-        if configExists():
+        if fileExists(CONFIG_PATH):
             with open(CONFIG_PATH, "r") as file:
                 config = yaml.safe_load(file)
                 if "dictionaries" in config:
@@ -388,7 +388,7 @@ class LazyController:
             json.dump(data, file, indent=2)
 
     def setDefaults(self):
-        Path(CONFIG_PATH).unlink(missing_ok=True)  # delete config
+        deleteFile(CONFIG_PATH)
         self._view.config["modelName"].setText(MODEL_NAME)
         self._view.config["deckName"].setText(DECK_NAME)
         self._view.config["cacheEnabled"].setChecked(CACHE_ENABLED)
@@ -402,7 +402,7 @@ class LazyController:
             with open(CREATED_PATH, "r") as file:
                 data = json.load(file)
                 app.invoke("deleteDecks", decks=data["Created decks"], cardsToo=True)
-            Path(CONFIG_PATH).unlink(missing_ok=True)
+            deleteFile(CONFIG_PATH)
             shutil.rmtree(".cache")
 
 
@@ -418,7 +418,7 @@ class LazyModel:
         logging.info("Initialization...")
         app.open_anki()
         dic = {}
-        if configExists():
+        if fileExists(CONFIG_PATH):
             with open(CONFIG_PATH, "r") as file:
                 config = yaml.safe_load(file)
                 dic = config.get("dictionaries", {})
@@ -451,9 +451,8 @@ class LazyModel:
 
     @staticmethod
     def logCreatedJson(modelName, deckName):
-        Path(CREATED_PATH).parent.mkdir(parents=True, exist_ok=True)
-        Path(CREATED_PATH).touch(exist_ok=True)
-        if Path(CREATED_PATH).stat().st_size == 0:
+        createFile(CREATED_PATH, exist_ok=True)
+        if fileNotEmpty(CREATED_PATH):
             with open(CREATED_PATH, "w") as file:
                 currentData = {
                     "Created models": [modelName],
@@ -472,16 +471,28 @@ class LazyModel:
 
 
 def loadConfig():
-    if Path(CONFIG_PATH).is_file():
+    if fileExists(CONFIG_PATH):
         with open(CONFIG_PATH, "r") as file:
             config = yaml.safe_load(file)
-            if config:
-                globals().update(config)
+            globals().update(config)
 
 
-def configExists():
-    config = Path(CONFIG_PATH)
-    return config.is_file() and config.stat().st_size != 0
+def createFile(filename, exist_ok):
+    Path(filename).parent.mkdir(parents=True, exist_ok=exist_ok)
+    Path(filename).touch(exist_ok=exist_ok)
+    return filename
+
+
+def deleteFile(filename):
+    Path(filename).unlink(missing_ok=True)
+
+
+def fileExists(filename):
+    return Path(filename).is_file()
+
+
+def fileNotEmpty(filename):
+    return Path(filename).stat().st_size != 0
 
 
 def main():
