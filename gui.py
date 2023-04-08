@@ -353,7 +353,7 @@ class LazyController:
 
     @threading
     def _initializeModel(self):
-        LazyModel._initialize()
+        self._model._initialize()
 
     @threading
     def createNotes(self):
@@ -367,30 +367,41 @@ class LazyController:
                 words = file.read()
                 self._view.setInput(words)
 
+    def getConfig(self):
+        config = {}
+
+        constants = [MODEL_NAME, DECK_NAME, CACHE_ENABLED, CACHED_WORDS_PATH]
+        for const, (key, field) in zip(constants, self._view.config.items()):
+            value = field.text() if key != "cacheEnabled" else field.isChecked()
+            if const != value:
+                config[key] = value
+
+        for const, (key, checkbox) in zip(
+            DICTIONARIES.values(), self._view.dictionaries.items()
+        ):
+            value = checkbox.isChecked()
+
+            if const != value:
+                if "dictionaries" not in config:
+                    config["dictionaries"] = {}
+                config["dictionaries"][key] = value
+
+        return config
+
+    def updateConfigFile(self, config):
+        if config:  # config is not default
+            with open(CONFIG_PATH, "w") as configFile:
+                yaml.safe_dump(config, configFile)
+        else:
+            deleteFile(CONFIG_PATH)
+
     def saveConfig(self):
-        initialConfig = self._model.config
+        initialConfig = self._model.initialConfig
+        currentConfig = self.getConfig()
 
-        with open(CONFIG_PATH, "w") as configFile:
-            constants = [MODEL_NAME, DECK_NAME, CACHE_ENABLED, CACHED_WORDS_PATH]
-            for const, (key, field) in zip(constants, self._view.config.items()):
-                value = field.text() if key != "cacheEnabled" else field.isChecked()
-                if const != value:
-                    yaml.safe_dump({key: value}, configFile)
+        self.updateConfigFile(currentConfig)
 
-            dictionaries = {}
-            for const, (key, checkbox) in zip(
-                DICTIONARIES.values(), self._view.dictionaries.items()
-            ):
-                value = checkbox.isChecked()
-                if const != value:
-                    dictionaries[key] = value
-            if dictionaries:
-                yaml.safe_dump({"dictionaries": dictionaries}, configFile)
-
-        with open(CONFIG_PATH, "r") as configFile:
-            currentConfig = yaml.safe_load(configFile)
-        with open(CACHE_PATH, "r+") as cacheFile:
-            cache = json.load(cacheFile)
+        cache = self.getCache()
         with open(CACHE_PATH, "w") as cacheFile:
             if initialConfig != currentConfig:
                 cache["Config changed"] = True
@@ -398,12 +409,16 @@ class LazyController:
                 cache["Config changed"] = False
             json.dump(cache, cacheFile, indent=2)
 
+    def getCache(self):
+        with open(CACHE_PATH, "r") as cacheFile:
+            return json.load(cacheFile)
+
     def clearData(self):
         confirmed = self._view._runWarningDialog()
         if confirmed:
-            with open(CACHE_PATH, "r") as file:
-                data = json.load(file)
-                app.invoke("deleteDecks", decks=data["Created decks"], cardsToo=True)
+            with open(CACHE_PATH, "r") as cacheFile:
+                cache = json.load(cacheFile)
+                app.invoke("deleteDecks", decks=cache["Created decks"], cardsToo=True)
             deleteFile(CONFIG_PATH)
             shutil.rmtree(".cache")
 
@@ -412,29 +427,66 @@ class LazyModel:
     """Model class"""
 
     def __init__(self):
-        with open(CONFIG_PATH, "r") as file:
-            self.config = yaml.safe_load(file)
-
-    @staticmethod
-    def _initialize():
-        logging.info("Initialization...")
-        app.open_anki()
-        dic = {}
+        self.initialConfig = {}
         if fileExists(CONFIG_PATH):
             with open(CONFIG_PATH, "r") as file:
-                config = yaml.safe_load(file)
-                dic = config.get("dictionaries", {})
-        with open(CACHE_PATH, "r+") as file:
-            configChanged = json.load(file)["Config changed"]
-        if configChanged:
+                self.initialConfig = yaml.safe_load(file)
+
+    def _initialize(self):
+        logging.info("Initialization...")
+        app.open_anki()
+
+        dic = self.initialConfig.get("dictionaries", {})
+
+        if self.configChanged():
             if modelName not in app.invoke("modelNames"):
                 app.invoke(
                     "createModel", **app.get_model(model_name=modelName, links=dic)
                 )
             if deckName not in app.invoke("deckNames"):
                 app.invoke("createDeck", deck=deckName)
-            LazyModel.logCreatedJson(modelName, deckName)
+
+            self.updateConfigChanged(False)
+            self.updateCreated(modelName, deckName)
+
         logging.info("Ready to use")
+
+    def updateConfigChanged(self, configChanged):
+        createFile(CACHE_PATH, exist_ok=True)
+        with open(CACHE_PATH, "r+") as file:
+            if fileNotEmpty(CACHE_PATH):
+                data = json.load(file)
+                file.seek(0)
+            else:
+                data = {}
+            data["Config changed"] = configChanged
+            json.dump(data, file, indent=2)
+
+    def updateCreated(self, modelName, deckName):
+        with open(CACHE_PATH, "r+") as file:
+            data = json.load(file)
+            file.seek(0)
+
+            if "Created models" and "Created decks" in data:
+                if modelName not in data["Created models"]:
+                    data["Created models"].append(modelName)
+                if deckName not in data["Created decks"]:
+                    data["Created decks"].append(deckName)
+            else:
+                currentData = {
+                    "Created models": [modelName],
+                    "Created decks": [deckName],
+                }
+                data.update(currentData)
+
+            json.dump(data, file, indent=2)
+
+    def configChanged(self):
+        if fileExists(CACHE_PATH):
+            with open(CACHE_PATH, "r+") as file:
+                return json.load(file)["Config changed"]
+
+        return True  # no cache on first start
 
     @staticmethod
     def _createNotes(words):
@@ -450,26 +502,6 @@ class LazyModel:
             with open(cachePath, "w", encoding="utf-8") as file:
                 json.dump(cache, file, indent=2)
         logging.info("Сards created")
-
-    @staticmethod
-    def logCreatedJson(modelName, deckName):
-        createFile(CACHE_PATH, exist_ok=True)
-        if fileNotEmpty(CACHE_PATH):
-            with open(CACHE_PATH, "w") as file:
-                currentData = {
-                    "Created models": [modelName],
-                    "Created decks": [deckName],
-                }
-                json.dump(currentData, file, indent=2)
-        else:
-            with open(CACHE_PATH, "r+") as file:
-                data = json.load(file)
-                file.seek(0)
-                if modelName not in data["Created models"]:
-                    data["Created models"].append(modelName)
-                if deckName not in data["Created decks"]:
-                    data["Created decks"].append(deckName)
-                json.dump(data, file, indent=2)
 
 
 def loadConfig():
