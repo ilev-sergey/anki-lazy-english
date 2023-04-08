@@ -265,6 +265,28 @@ class LazyDialog(QDialog):
         cursor.setPosition(len(self.inputField.toPlainText()))
         self.inputField.setTextCursor(cursor)  # set cursor at the end
 
+    def getConfig(self):
+        """Return non-default values from Settings tab"""
+        config = {}
+
+        constants = [MODEL_NAME, DECK_NAME, CACHE_ENABLED, CACHED_WORDS_PATH]
+        for const, (key, field) in zip(constants, self.config.items()):
+            value = field.text() if key != "cacheEnabled" else field.isChecked()
+            if const != value:
+                config[key] = value
+
+        for const, (key, checkbox) in zip(
+            DICTIONARIES.values(), self.dictionaries.items()
+        ):
+            value = checkbox.isChecked()
+
+            if const != value:
+                if "dictionaries" not in config:
+                    config["dictionaries"] = {}
+                config["dictionaries"][key] = value
+
+        return config
+
     ## helper classes
 
     class QTextEditLogger(logging.Handler):
@@ -369,27 +391,6 @@ class LazyController:
                 words = file.read()
                 self._view.setInput(words)
 
-    def getConfig(self):
-        config = {}
-
-        constants = [MODEL_NAME, DECK_NAME, CACHE_ENABLED, CACHED_WORDS_PATH]
-        for const, (key, field) in zip(constants, self._view.config.items()):
-            value = field.text() if key != "cacheEnabled" else field.isChecked()
-            if const != value:
-                config[key] = value
-
-        for const, (key, checkbox) in zip(
-            DICTIONARIES.values(), self._view.dictionaries.items()
-        ):
-            value = checkbox.isChecked()
-
-            if const != value:
-                if "dictionaries" not in config:
-                    config["dictionaries"] = {}
-                config["dictionaries"][key] = value
-
-        return config
-
     def updateConfigFile(self, config):
         if config:  # config is not default
             with open(CONFIG_PATH, "w") as configFile:
@@ -399,7 +400,7 @@ class LazyController:
 
     def saveConfig(self):
         initialConfig = self._model.initialConfig
-        currentConfig = self.getConfig()
+        currentConfig = self._view.getConfig()
 
         self.updateConfigFile(currentConfig)
 
