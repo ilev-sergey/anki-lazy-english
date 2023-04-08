@@ -52,7 +52,7 @@ class Worker(QObject):
             self.finished.emit()
 
 
-class LazyDialog(QDialog):
+class MainWindow(QDialog):
     """Main window (view)"""
 
     def __init__(self):
@@ -231,7 +231,7 @@ class LazyDialog(QDialog):
         return advancedButtonsLayout
 
     def _runWarningDialog(self):
-        warning = LazyDialog.WarningDialog()
+        warning = MainWindow.WarningDialog()
         confirmation = warning.exec()
 
         return confirmation == QMessageBox.StandardButton.Ok
@@ -324,7 +324,7 @@ def threading(func):
     return wrapper
 
 
-class LazyController:
+class Controller:
     """Controller class"""
 
     def __init__(self, view, model):
@@ -377,7 +377,7 @@ class LazyController:
 
     @threading
     def _initializeModel(self):
-        self._model._initialize()
+        self._model._initializeApp()
 
     @threading
     def createNotes(self):
@@ -396,7 +396,7 @@ class LazyController:
         self._model.configHandler.updateConfigFile(currentConfig)
 
         initialConfig = self._model.configHandler.initialConfig
-        cache = self._model.cacheHandler.getCache()
+        cache = self._model.cacheHandler.cache()
 
         if initialConfig != currentConfig:
             cache["Config changed"] = True
@@ -411,21 +411,14 @@ class LazyController:
             self._model.deleteData()
 
 
-class LazyModel:
+class Model:
     """Model class"""
 
     def __init__(self):
         self.cacheHandler = CacheHandler(CACHE_PATH)
         self.configHandler = ConfigHandler(CONFIG_PATH)
 
-    def deleteData(self):
-        cache = self.cacheHandler.cache()
-        app.invoke("deleteDecks", decks=cache["Created decks"], cardsToo=True)
-
-        self.cacheHandler.deleteCacheFile()
-        self.configHandler.deleteConfigFile()
-
-    def _initialize(self):
+    def _initializeApp(self):
         logging.info("Initialization...")
         app.open_anki()
 
@@ -443,6 +436,13 @@ class LazyModel:
             self.cacheHandler.updateCreated(modelName, deckName)
 
         logging.info("Ready to use")
+
+    def deleteData(self):
+        cache = self.cacheHandler.cache()
+        app.invoke("deleteDecks", decks=cache["Created decks"], cardsToo=True)
+
+        self.cacheHandler.deleteCacheFile()
+        self.configHandler.deleteConfigFile()
 
     @staticmethod
     def _createNotes(words):
@@ -561,8 +561,8 @@ def fileNotEmpty(filename):
 def main():
     loadConfig()
     app = QApplication([])
-    dialog = LazyDialog()
-    controller = LazyController(view=dialog, model=LazyModel())
+    dialog = MainWindow()
+    controller = Controller(view=dialog, model=Model())
 
     dialog.show()
     app.exec()
