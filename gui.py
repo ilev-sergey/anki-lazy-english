@@ -408,11 +408,7 @@ class LazyController:
     def clearData(self):
         confirmed = self._view._runWarningDialog()
         if confirmed:
-            with open(CACHE_PATH, "r") as cacheFile:
-                cache = json.load(cacheFile)
-                app.invoke("deleteDecks", decks=cache["Created decks"], cardsToo=True)
-            deleteFile(CONFIG_PATH)
-            shutil.rmtree(".cache")
+            self._model.deleteData()
 
 
 class LazyModel:
@@ -421,6 +417,13 @@ class LazyModel:
     def __init__(self):
         self.cacheHandler = CacheHandler(CACHE_PATH)
         self.configHandler = ConfigHandler(CONFIG_PATH)
+
+    def deleteData(self):
+        cache = self.cacheHandler.cache()
+        app.invoke("deleteDecks", decks=cache["Created decks"], cardsToo=True)
+
+        self.cacheHandler.deleteCacheFile()
+        self.configHandler.deleteConfigFile()
 
     def _initialize(self):
         logging.info("Initialization...")
