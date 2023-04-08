@@ -265,6 +265,8 @@ class LazyDialog(QDialog):
         cursor.setPosition(len(self.inputField.toPlainText()))
         self.inputField.setTextCursor(cursor)  # set cursor at the end
 
+    ## helper classes
+
     class QTextEditLogger(logging.Handler):
         """Logging widget"""
 
@@ -305,7 +307,7 @@ class LazyController:
 
     def __init__(self, view, model):
         self._view = view
-        self._model = LazyModel()
+        self._model = model
 
         self._initializeThread()
         self._connectSignalsAndSlots()
@@ -358,7 +360,7 @@ class LazyController:
     @threading
     def createNotes(self):
         words = self._view.inputField.toPlainText().split()
-        LazyModel._createNotes(words)
+        self._model._createNotes(words)
 
     def uploadFile(self):
         filename = QFileDialog.getOpenFileName()[0]
@@ -436,12 +438,12 @@ class LazyModel:
         logging.info("Initialization...")
         app.open_anki()
 
-        dic = self.initialConfig.get("dictionaries", {})
+        dicts = self.initialConfig.get("dictionaries", {})
 
         if self.configChanged():
             if modelName not in app.invoke("modelNames"):
                 app.invoke(
-                    "createModel", **app.get_model(model_name=modelName, links=dic)
+                    "createModel", **app.get_model(model_name=modelName, links=dicts)
                 )
             if deckName not in app.invoke("deckNames"):
                 app.invoke("createDeck", deck=deckName)
@@ -533,7 +535,7 @@ def main():
     loadConfig()
     app = QApplication([])
     dialog = LazyDialog()
-    controller = LazyController(view=dialog, model=LazyModel)
+    controller = LazyController(view=dialog, model=LazyModel())
 
     dialog.show()
     app.exec()
