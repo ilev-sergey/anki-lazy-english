@@ -243,6 +243,14 @@ class LazyDialog(QDialog):
         self.setFocusOnInput()
         logging.info("Cleared")
 
+    def setDefaults(self):
+        self.config["modelName"].setText(MODEL_NAME)
+        self.config["deckName"].setText(DECK_NAME)
+        self.config["cacheEnabled"].setChecked(CACHE_ENABLED)
+        self.config["cachePath"].setText(CACHE_PATH)
+        for key, value in DICTIONARIES.items():
+            self.dictionaries[key].setChecked(value)
+
     def getInput(self):
         return self.inputField.toPlainText()
 
@@ -321,7 +329,9 @@ class LazyController:
         self._view.settingsButtons["Save"].clicked.connect(
             lambda checked: self._view.settingsLabel.setText("Please restart the app")
         )
-        self._view.settingsButtons["Set defaults"].clicked.connect(self.setDefaults)
+        self._view.settingsButtons["Set defaults"].clicked.connect(
+            self._view.setDefaults
+        )
         self._view.settingsButtons["Set defaults"].clicked.connect(
             lambda checked: self._view.settingsLabel.setText("Please restart the app")
         )
@@ -386,15 +396,6 @@ class LazyController:
             else:
                 data["Config changed"] = False
             json.dump(data, file, indent=2)
-
-    def setDefaults(self):
-        deleteFile(CONFIG_PATH)
-        self._view.config["modelName"].setText(MODEL_NAME)
-        self._view.config["deckName"].setText(DECK_NAME)
-        self._view.config["cacheEnabled"].setChecked(CACHE_ENABLED)
-        self._view.config["cachePath"].setText(CACHE_PATH)
-        for key, value in DICTIONARIES.items():
-            self._view.dictionaries[key].setChecked(value)
 
     def clearData(self):
         confirmed = self._view._runWarningDialog()
