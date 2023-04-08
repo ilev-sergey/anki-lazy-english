@@ -431,6 +431,7 @@ class LazyModel:
 
     def __init__(self):
         self.initialConfig = {}
+        self.cacheHandler = CacheHandler(CACHE_PATH)
         if fileExists(CONFIG_PATH):
             with open(CONFIG_PATH, "r") as file:
                 self.initialConfig = yaml.safe_load(file)
@@ -441,7 +442,7 @@ class LazyModel:
 
         dicts = self.initialConfig.get("dictionaries", {})
 
-        if self.configChanged():
+        if self.cacheHandler.configChanged():
             if modelName not in app.invoke("modelNames"):
                 app.invoke(
                     "createModel", **app.get_model(model_name=modelName, links=dicts)
@@ -449,15 +450,45 @@ class LazyModel:
             if deckName not in app.invoke("deckNames"):
                 app.invoke("createDeck", deck=deckName)
 
-            self.updateConfigChanged(False)
-            self.updateCreated(modelName, deckName)
+            self.cacheHandler.updateConfigChanged(False)
+            self.cacheHandler.updateCreated(modelName, deckName)
 
         logging.info("Ready to use")
 
+    @staticmethod
+    def _createNotes(words):
+        logging.info("Creating cards...")
+        cache = app.load_cache() if cacheEnabled else {}
+        app.invoke(
+            "addNotes",
+            notes=app.get_notes(
+                words, cache=cache, model_name=modelName, deck_name=deckName
+            ),
+        )
+        if cacheEnabled:
+            with open(cachePath, "w", encoding="utf-8") as file:
+                json.dump(cache, file, indent=2)
+        logging.info("Сards created")
+
+
+class CacheHandler:
+    def __init__(self, cachePath):
+        self.cachePath = cachePath
+
+    def cache(self):
+        with open(self.cachePath, "r") as cacheFile:
+            return json.load(cacheFile)
+
+    def configChanged(self):
+        if fileExists(self.cachePath):
+            return self.cache()["Config changed"]
+
+        return True  # no cache on first start
+
     def updateConfigChanged(self, configChanged):
-        createFile(CACHE_PATH, exist_ok=True)
-        with open(CACHE_PATH, "r+") as file:
-            if fileNotEmpty(CACHE_PATH):
+        createFile(self.cachePath, exist_ok=True)
+        with open(self.cachePath, "r+") as file:
+            if fileNotEmpty(self.cachePath):
                 data = json.load(file)
                 file.seek(0)
             else:
@@ -466,7 +497,7 @@ class LazyModel:
             json.dump(data, file, indent=2)
 
     def updateCreated(self, modelName, deckName):
-        with open(CACHE_PATH, "r+") as file:
+        with open(self.cachePath, "r+") as file:
             data = json.load(file)
             file.seek(0)
 
@@ -484,27 +515,13 @@ class LazyModel:
 
             json.dump(data, file, indent=2)
 
-    def configChanged(self):
-        if fileExists(CACHE_PATH):
-            with open(CACHE_PATH, "r+") as file:
-                return json.load(file)["Config changed"]
+    def updateCacheFile(self, cache):
+        with open(self.cachePath, "w") as cacheFile:
+            json.dump(cache, cacheFile, indent=2)
 
-        return True  # no cache on first start
-
-    @staticmethod
-    def _createNotes(words):
-        logging.info("Creating cards...")
-        cache = app.load_cache() if cacheEnabled else {}
-        app.invoke(
-            "addNotes",
-            notes=app.get_notes(
-                words, cache=cache, model_name=modelName, deck_name=deckName
-            ),
-        )
-        if cacheEnabled:
-            with open(cachePath, "w", encoding="utf-8") as file:
-                json.dump(cache, file, indent=2)
-        logging.info("Сards created")
+    def deleteCacheFile(self):
+        deleteFile(self.cachePath)
+        shutil.rmtree(".cache")
 
 
 def loadConfig():
