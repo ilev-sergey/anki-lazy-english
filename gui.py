@@ -360,6 +360,9 @@ class Controller:
         self._view.settingsButtons["Set defaults"].clicked.connect(
             lambda checked: self._view.settingsLabel.setText("Please restart the app")
         )
+        self._view.config["cacheEnabled"].clicked.connect(
+            lambda checked: self._view.config["cachePath"].setDisabled(not checked)
+        )
 
         self._view.advancedButtons["Clear data"].clicked.connect(
             lambda checked: self.clearData()
